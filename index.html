@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TQQQ Entry Signal Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --panel: #0d1318;
+    --border: #1a2530;
+    --border-bright: #2a3f55;
+    --text: #c8d8e8;
+    --muted: #4a6070;
+    --accent: #00c8ff;
+    --green: #00e87a;
+    --red: #ff3d5a;
+    --yellow: #ffc340;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(0,200,255,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(0,232,122,0.03) 0%, transparent 60%);
+  }
+
+  .scanline {
+    position: fixed; inset: 0; pointer-events: none; z-index: 100;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+    );
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(13,19,24,0.9);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 10;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--muted); }
+
+  .header-right {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  .main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* API KEY SETUP */
+  #setup-panel {
+    border: 1px solid var(--border-bright);
+    background: var(--panel);
+    border-radius: 4px;
+    padding: 36px;
+    margin-bottom: 32px;
+  }
+
+  #setup-panel h2 {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  #setup-panel p {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  #setup-panel a { color: var(--accent); text-decoration: none; }
+  #setup-panel a:hover { text-decoration: underline; }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .key-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .key-input:focus { border-color: var(--accent); }
+  .key-input::placeholder { color: var(--muted); }
+
+  .btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 11px 20px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.secondary {
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--muted);
+  }
+  .btn.secondary:hover { border-color: var(--text); color: var(--text); }
+
+  /* VERDICT BANNER */
+  #verdict {
+    border-radius: 4px;
+    padding: 20px 28px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: all 0.4s;
+  }
+  #verdict.pass { background: rgba(0,232,122,0.08); border: 1px solid rgba(0,232,122,0.3); }
+  #verdict.fail { background: rgba(255,61,90,0.08); border: 1px solid rgba(255,61,90,0.25); }
+  #verdict.neutral { background: rgba(255,195,64,0.06); border: 1px solid rgba(255,195,64,0.25); }
+  #verdict.loading { background: rgba(0,200,255,0.05); border: 1px solid rgba(0,200,255,0.2); }
+
+  .verdict-main {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .verdict-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .verdict-score {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    opacity: 0.9;
+  }
+
+  /* SIGNALS GRID */
+  .signals-grid {
+    display: grid;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .signal-row {
+    background: var(--panel);
+    display: grid;
+    grid-template-columns: 1fr 130px 130px 90px;
+    align-items: center;
+    padding: 18px 24px;
+    gap: 16px;
+    transition: background 0.2s;
+  }
+  .signal-row:hover { background: #111921; }
+
+  .signal-row.header-row {
+    background: #0a0f14;
+    padding: 10px 24px;
+    pointer-events: none;
+  }
+  .signal-row.header-row .col-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .signal-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .signal-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  .signal-value {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .signal-threshold {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .signal-badge {
+    text-align: right;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+  }
+  .badge.pass { background: rgba(0,232,122,0.15); color: var(--green); border: 1px solid rgba(0,232,122,0.3); }
+  .badge.fail { background: rgba(255,61,90,0.12); color: var(--red); border: 1px solid rgba(255,61,90,0.25); }
+  .badge.loading { background: rgba(0,200,255,0.08); color: var(--accent); border: 1px solid rgba(0,200,255,0.2); animation: pulse 1.2s ease-in-out infinite; }
+  .badge.error { background: rgba(255,195,64,0.1); color: var(--yellow); border: 1px solid rgba(255,195,64,0.25); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* FOOTER / CONTROLS */
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .last-updated {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .error-note {
+    background: rgba(255,195,64,0.07);
+    border: 1px solid rgba(255,195,64,0.2);
+    border-radius: 3px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--yellow);
+    margin-top: 16px;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .info-note {
+    margin-top: 28px;
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .info-note strong { color: var(--text); }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,200,255,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+
+  .change-key-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .change-key-btn:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<header>
+  <div class="logo">TQQQ <span>// ENTRY SIGNAL TRACKER</span></div>
+  <div class="header-right">
+    <div id="header-status">3 of 5 signals required</div>
+    <div>Free · No backend · Open source data</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- API Key Setup -->
+  <div id="setup-panel">
+    <h2>⚡ One-time setup — Alpha Vantage API Key</h2>
+    <p>
+      This tracker is 100% free with no backend. It uses <a href="https://www.alphavantage.co/support/#api-key" target="_blank">Alpha Vantage's free API</a> (25 calls/day — enough for ~8 daily refreshes) for VIX and QQQ price data. Sentiment and Put/Call data are fetched from fully free public endpoints. Your key is stored only in your browser's memory and is never sent anywhere except Alpha Vantage.
+    </p>
+    <div class="input-row">
+      <input class="key-input" id="av-key-input" type="text" placeholder="Paste your Alpha Vantage key here (e.g. ABC123XYZ)" autocomplete="off" spellcheck="false" />
+      <button class="btn" id="save-key-btn" onclick="saveKey()">Save &amp; Fetch</button>
+    </div>
+  </div>
+
+  <!-- Active tracker (hidden until key saved) -->
+  <div id="tracker-panel" class="hidden">
+
+    <div id="verdict" class="neutral">
+      <div>
+        <div class="verdict-main" id="verdict-text">—</div>
+        <div class="verdict-sub" id="verdict-sub">Fetching signals…</div>
+      </div>
+      <div class="verdict-score" id="verdict-score">—</div>
+    </div>
+
+    <div class="signals-grid">
+      <div class="signal-row header-row">
+        <div class="col-label">Signal</div>
+        <div class="col-label" style="text-align:right">Current Value</div>
+        <div class="col-label" style="text-align:right">Threshold</div>
+        <div class="col-label" style="text-align:right">Status</div>
+      </div>
+
+      <!-- VIX -->
+      <div class="signal-row" id="row-vix">
+        <div>
+          <div class="signal-name">CBOE VIX</div>
+          <div class="signal-desc">Fear gauge · must be elevated</div>
+        </div>
+        <div class="signal-value" id="val-vix">—</div>
+        <div class="signal-threshold">≥ 22</div>
+        <div class="signal-badge"><span class="badge loading" id="badge-vix">···</span></div>
+      </div>
+
+      <!-- CNN Fear & Greed -->
+      <div class="signal-row" id="row-fng">
+        <div>
+          <div class="signal-name">CNN Fear &amp; Greed</div>
+          <div class="signal-desc">Market sentiment · must be fearful</div>
+        </div>
+        <div class="signal-value" id="val-fng">—</div>
+        <div class="signal-threshold">≤ 35</div>
+        <div class="signal-badge"><span class="badge loading" id="badge-fng">···</span></div>
+      </div>
+
+      <!-- QQQ RSI -->
+      <div class="signal-row" id="row-rsi">
+        <div>
+          <div class="signal-name">QQQ RSI (14-day)</div>
+          <div class="signal-desc">Momentum oversold</div>
+        </div>
+        <div class="signal-value" id="val-rsi">—</div>
+        <div class="signal-threshold">≤ 35</div>
+        <div class="signal-badge"><span class="badge loading" id="badge-rsi">···</span></div>
+      </div>
+
+      <!-- QQQ vs 50MA -->
+      <div class="signal-row" id="row-ma">
+        <div>
+          <div class="signal-name">QQQ vs 50-day MA</div>
+          <div class="signal-desc">Price dislocation below average</div>
+        </div>
+        <div class="signal-value" id="val-ma">—</div>
+        <div class="signal-threshold">≥ 8% below</div>
+        <div class="signal-badge"><span class="badge loading" id="badge-ma">···</span></div>
+      </div>
+
+      <!-- Put/Call -->
+      <div class="signal-row" id="row-pc">
+        <div>
+          <div class="signal-name">CBOE Put/Call Ratio</div>
+          <div class="signal-desc">Options sentiment · must be fearful</div>
+        </div>
+        <div class="signal-value" id="val-pc">—</div>
+        <div class="signal-threshold">≥ 1.10</div>
+        <div class="signal-badge"><span class="badge loading" id="badge-pc">···</span></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="last-updated" id="last-updated">Not yet refreshed</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="change-key-btn" onclick="changeKey()">Change key</button>
+        <button class="btn secondary" id="refresh-btn" onclick="fetchAll()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="error-note" id="error-note"></div>
+  </div>
+
+  <div class="info-note">
+    <strong>Data sources:</strong> VIX &amp; QQQ prices via Alpha Vantage (free API, <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent)">get key here</a>) ·
+    Sentiment via CNN Fear &amp; Greed Index (public) ·
+    Put/Call via CBOE (public) ·
+    RSI and 50MA calculated locally from raw price data.
+    <br><br>
+    <strong>Signal rule:</strong> 3 of 5 signals must pass for a TQQQ entry. Refresh once daily — Alpha Vantage free tier allows 25 calls/day.
+  </div>
+</div>
+
+<script>
+  // ─── STATE ───────────────────────────────────────────────
+  let AV_KEY = null;
+  const CORS_PROXY = 'https://corsproxy.io/?';
+  const signals = { vix: null, fng: null, rsi: null, ma: null, pc: null };
+
+  // ─── KEY MANAGEMENT ──────────────────────────────────────
+  function saveKey() {
+    const k = document.getElementById('av-key-input').value.trim();
+    if (!k) { alert('Please enter your Alpha Vantage API key.'); return; }
+    AV_KEY = k;
+    document.getElementById('setup-panel').classList.add('hidden');
+    document.getElementById('tracker-panel').classList.remove('hidden');
+    fetchAll();
+  }
+
+  document.getElementById('av-key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveKey();
+  });
+
+  function changeKey() {
+    document.getElementById('setup-panel').classList.remove('hidden');
+    document.getElementById('tracker-panel').classList.add('hidden');
+    document.getElementById('av-key-input').value = AV_KEY || '';
+    AV_KEY = null;
+  }
+
+  // ─── FETCH ORCHESTRATOR ──────────────────────────────────
+  async function fetchAll() {
+    const btn = document.getElementById('refresh-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Fetching…';
+    hideError();
+    resetBadges();
+    updateVerdict(null, null);
+
+    const errors = [];
+
+    const [vixResult, qqqResult, fngResult, pcResult] = await Promise.allSettled([
+      fetchVIX(),
+      fetchQQQ(),
+      fetchFearGreed(),
+      fetchPutCall()
+    ]);
+
+    if (vixResult.status === 'fulfilled') {
+      setSignal('vix', vixResult.value, vixResult.value >= 22);
+    } else { setError('vix', vixResult.reason); errors.push('VIX: ' + vixResult.reason); }
+
+    if (qqqResult.status === 'fulfilled') {
+      const { rsi, pctBelowMA } = qqqResult.value;
+      setSignal('rsi', rsi.toFixed(1), rsi <= 35);
+      const maLabel = '-' + Math.abs(pctBelowMA).toFixed(1) + '%';
+      setSignal('ma', maLabel, pctBelowMA <= -8);
+    } else {
+      setError('rsi', qqqResult.reason);
+      setError('ma', qqqResult.reason);
+      errors.push('QQQ: ' + qqqResult.reason);
+    }
+
+    if (fngResult.status === 'fulfilled') {
+      setSignal('fng', fngResult.value, fngResult.value <= 35);
+    } else { setError('fng', fngResult.reason); errors.push('F&G: ' + fngResult.reason); }
+
+    if (pcResult.status === 'fulfilled') {
+      setSignal('pc', pcResult.value.toFixed(2), pcResult.value >= 1.10);
+    } else { setError('pc', pcResult.reason); errors.push('P/C: ' + pcResult.reason); }
+
+    // Tally
+    const passing = Object.values(signals).filter(v => v === true).length;
+    const counted = Object.values(signals).filter(v => v !== null).length;
+    updateVerdict(passing, counted);
+
+    document.getElementById('last-updated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+    if (errors.length) showError(errors.join(' · '));
+
+    btn.disabled = false;
+    btn.innerHTML = '↻ Refresh';
+  }
+
+  // ─── ALPHA VANTAGE: VIX ──────────────────────────────────
+  async function fetchVIX() {
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=%5EVIX&apikey=${AV_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data['Note'] || data['Information']) throw 'Rate limit reached';
+    const price = parseFloat(data['Global Quote']?.['05. price']);
+    if (isNaN(price)) throw 'No VIX data';
+    return price;
+  }
+
+  // ─── ALPHA VANTAGE: QQQ RSI + 50MA ───────────────────────
+  async function fetchQQQ() {
+    // Get daily prices (compact = last 100 days)
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=QQQ&outputsize=compact&apikey=${AV_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data['Note'] || data['Information']) throw 'Rate limit reached';
+
+    const ts = data['Time Series (Daily)'];
+    if (!ts) throw 'No QQQ data';
+
+    const dates = Object.keys(ts).sort().reverse(); // newest first
+    const closes = dates.map(d => parseFloat(ts[d]['4. close']));
+
+    // 50-day MA
+    const ma50 = closes.slice(0, 50).reduce((a, b) => a + b, 0) / 50;
+    const currentPrice = closes[0];
+    const pctBelowMA = ((currentPrice - ma50) / ma50) * 100;
+
+    // RSI(14) — standard Wilder smoothing
+    const rsi = calcRSI(closes.slice(0, 15 + 14)); // need ~30 for stability
+    return { rsi, pctBelowMA };
+  }
+
+  function calcRSI(closes) {
+    // closes[0] = most recent, closes[n] = oldest
+    // We need at least 15 values; reverse to oldest→newest for calculation
+    const prices = closes.slice(0, 15).reverse();
+    let gains = 0, losses = 0;
+    for (let i = 1; i < 15; i++) {
+      const diff = prices[i] - prices[i - 1];
+      if (diff > 0) gains += diff;
+      else losses -= diff;
+    }
+    const avgGain = gains / 14;
+    const avgLoss = losses / 14;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  // ─── CNN FEAR & GREED ─────────────────────────────────────
+  async function fetchFearGreed() {
+    const url = CORS_PROXY + encodeURIComponent('https://production.dataviz.cnn.io/index/fearandgreed/graphdata');
+    const res = await fetch(url);
+    const data = await res.json();
+    const score = data?.fear_and_greed?.score;
+    if (score == null) throw 'No F&G data';
+    return parseFloat(score);
+  }
+
+  // ─── CBOE PUT/CALL ───────────────────────────────────────
+  async function fetchPutCall() {
+    // CBOE publishes daily total put/call as a public CSV
+    const url = CORS_PROXY + encodeURIComponent('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_EOD.json');
+    // Fallback: use a known public endpoint
+    try {
+      const res = await fetch(CORS_PROXY + encodeURIComponent('https://www.cboe.com/us/options/market_statistics/daily/'));
+      const text = await res.text();
+      // Parse the total P/C ratio from the HTML table
+      const match = text.match(/Total Put\/Call[^<]*<[^>]+>[^<]*<[^>]+>([\d.]+)/i) ||
+                    text.match(/TOTAL[^<]*<\/td>[^<]*<td[^>]*>([\d.]+)/i);
+      if (match) return parseFloat(match[1]);
+    } catch(e) {}
+
+    // Fallback to fetching CBOE public JSON data endpoint
+    const res2 = await fetch(CORS_PROXY + encodeURIComponent('https://markets.cboe.com/us/options/market_statistics/api/?market=cone'));
+    const data2 = await res2.json();
+    // Try to find put_call or total ratio
+    const pc = data2?.data?.totalPutCallRatio || data2?.totalPutCallRatio;
+    if (pc != null) return parseFloat(pc);
+
+    throw 'Could not parse Put/Call data';
+  }
+
+  // ─── UI HELPERS ──────────────────────────────────────────
+  function resetBadges() {
+    ['vix','fng','rsi','ma','pc'].forEach(id => {
+      signals[id] = null;
+      const badge = document.getElementById('badge-' + id);
+      badge.className = 'badge loading';
+      badge.textContent = '···';
+      document.getElementById('val-' + id).textContent = '—';
+      document.getElementById('val-' + id).style.color = 'var(--muted)';
+    });
+  }
+
+  function setSignal(id, displayVal, passes) {
+    signals[id] = passes;
+    const badge = document.getElementById('badge-' + id);
+    const val = document.getElementById('val-' + id);
+    badge.className = 'badge ' + (passes ? 'pass' : 'fail');
+    badge.textContent = passes ? 'PASS ✓' : 'FAIL ✗';
+    val.textContent = displayVal;
+    val.style.color = passes ? 'var(--green)' : 'var(--red)';
+  }
+
+  function setError(id, msg) {
+    signals[id] = null;
+    const badge = document.getElementById('badge-' + id);
+    const val = document.getElementById('val-' + id);
+    badge.className = 'badge error';
+    badge.textContent = 'ERR';
+    val.textContent = 'N/A';
+    val.style.color = 'var(--yellow)';
+  }
+
+  function updateVerdict(passing, counted) {
+    const v = document.getElementById('verdict');
+    const vt = document.getElementById('verdict-text');
+    const vs = document.getElementById('verdict-sub');
+    const vsc = document.getElementById('verdict-score');
+
+    if (passing === null) {
+      v.className = 'loading'; vt.textContent = 'Loading…';
+      vs.textContent = 'Fetching live market data';
+      vsc.textContent = '—'; return;
+    }
+
+    vsc.textContent = passing + '/5';
+
+    if (passing >= 3) {
+      v.className = 'pass';
+      vt.textContent = '✓ ENTRY SIGNAL ACTIVE';
+      vt.style.color = 'var(--green)';
+      vs.textContent = passing + ' of 5 signals passing — conditions favour a TQQQ entry';
+    } else if (passing === 2) {
+      v.className = 'neutral';
+      vt.textContent = '⚠ BORDERLINE — WATCH CLOSELY';
+      vt.style.color = 'var(--yellow)';
+      vs.textContent = '2 of 5 signals passing — one more signal needed';
+    } else {
+      v.className = 'fail';
+      vt.textContent = '✗ NO ENTRY — CONDITIONS NOT MET';
+      vt.style.color = 'var(--red)';
+      vs.textContent = passing + ' of 5 signals passing — wait for more fear';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-note');
+    el.style.display = 'block';
+    el.innerHTML = '⚠ Some signals failed to load. This is usually a CORS or rate-limit issue. <br><strong>Details:</strong> ' + msg +
+      '<br><br>Try: (1) Refresh again in a minute, (2) Check your Alpha Vantage key at <a href="https://www.alphavantage.co" target="_blank" style="color:inherit">alphavantage.co</a>, (3) CNN/CBOE data may need VPN or try on a different network.';
+  }
+
+  function hideError() {
+    document.getElementById('error-note').style.display = 'none';
+  }
+</script>
+</body>
+</html>
